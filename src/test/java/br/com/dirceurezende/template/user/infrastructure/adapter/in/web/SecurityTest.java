@@ -112,6 +112,23 @@ class SecurityTest extends PostgresIntegrationTest {
         mvc.perform(delete("/api/users/" + ana.id()).header("Authorization", admin.bearer())).andExpect(status().isNoContent());
     }
 
+    @Test
+    void welcomeIsForSelfOrAdmin() throws Exception {
+        var ana = signup("ana@example.com");
+        var bob = signup("bob@example.com");
+        var admin = admin("admin@example.com");
+
+        mvc.perform(post("/api/users/" + ana.id() + "/welcome")).andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/users/" + bob.id() + "/welcome").header("Authorization", ana.bearer()))
+                .andExpect(status().isForbidden());
+        mvc.perform(post("/api/users/" + ana.id() + "/welcome").header("Authorization", ana.bearer()))
+                .andExpect(status().isAccepted());
+        mvc.perform(post("/api/users/" + bob.id() + "/welcome").header("Authorization", admin.bearer()))
+                .andExpect(status().isAccepted());
+        mvc.perform(post("/api/users/" + UUID.randomUUID() + "/welcome").header("Authorization", admin.bearer()))
+                .andExpect(status().isNotFound());
+    }
+
     // ---- refresh / logout
     @Test
     void refreshRotatesToken() throws Exception {

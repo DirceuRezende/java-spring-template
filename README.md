@@ -1,9 +1,9 @@
 # user-template — Hexagonal com Java 25 + Spring Boot 4
 
-Template de referência com um agregado `User`, com autenticação JWT.
+Template de referência com um agregado `User`, autenticação JWT e mensageria com Kafka (Transactional Outbox).
 
 ```bash
-docker compose up -d                                   # Postgres 17 local (porta 5432)
+docker compose up -d                                   # Postgres 17 (5432) + Kafka (9092)
 ./mvnw spring-boot:run -Dspring-boot.run.profiles=dev   # app com segredo JWT e admin de dev
 ./mvnw test                                             # inclui ArchitectureTest (quebra o build se a regra de dependência for violada)
 ```
@@ -37,6 +37,7 @@ O schema é versionado pelo **Flyway** em `src/main/resources/db/migration` e ap
 | GET | `/api/users/{id}` | 200 / 404 |
 | PUT | `/api/users/{id}` | 200 / 404 (altera só o nome) |
 | DELETE | `/api/users/{id}` | 204 / 404 (soft delete: `active=false`) |
+| POST | `/api/users/{id}/welcome` | 202 / 404 (assíncrono, via Kafka; usuário inativo = 404) |
 
 ## Estrutura
 
@@ -60,6 +61,9 @@ br.com.dirceurezende.template
     │   └── usecase/                        implementações dos use cases (POJOs)
     └── infrastructure/
         ├── adapter/in/web/                 Controller, Request/Response, ProblemDetail
+        ├── adapter/in/messaging/           @KafkaListener → caso de uso
+        ├── adapter/out/outbox/             outbox (JPA) + relay para o Kafka
+        ├── adapter/out/notification/       WelcomeNotifier (log)
         ├── adapter/out/persistence/        JpaEntity, Spring Data, Mapper, Adapter
         ├── adapter/out/security/           PasswordHasher via PasswordEncoder
         └── config/                         monta os beans + transações (TransactionTemplate)
@@ -85,7 +89,7 @@ Rodar local: `docker compose up -d` e `./mvnw spring-boot:run -Dspring-boot.run.
 |---|---|
 | `POST /api/users`, `/api/auth/login`, `/api/auth/refresh`, `/api/auth/logout` | público |
 | `GET /api/users` (lista) | só ADMIN |
-| `GET/PUT/DELETE /api/users/{id}` | ADMIN, ou o próprio usuário |
+| `GET/PUT/DELETE /api/users/{id}`, `POST /api/users/{id}/welcome` | ADMIN, ou o próprio usuário |
 
 - **Login** devolve `accessToken` (JWT HS256, 15 min, `sub` = id, claim `roles`) e `refreshToken` (opaco, 7 dias, guardado só como SHA-256 em `refresh_tokens`). Use `Authorization: Bearer <accessToken>`.
 - **Refresh** rotaciona: cada refresh token vale uma vez. **Logout** revoga o refresh token enviado. Excluir (desativar) um usuário revoga todos os refresh tokens dele; inativo não loga nem renova.
@@ -93,9 +97,42 @@ Rodar local: `docker compose up -d` e `./mvnw spring-boot:run -Dspring-boot.run.
 
 **Limites conhecidos:** o access token continua válido até expirar (≤ 15 min) após logout/exclusão; sem detecção de reuso de refresh token, sem rate limit/lockout no login e sem limpeza de refresh tokens expirados.
 
+## Mensageria (Kafka + Transactional Outbox)
+
+Exemplo de producer **e** consumer sem que o core conheça o Kafka: `domain` e `application` só veem portas (o `ArchitectureTest` proíbe `org.apache.kafka..` nessas camadas).
+
+```
+POST /api/users/{id}/welcome
+  └─ RequestWelcomeUseCase ──(porta out UserEventPublisher)──► OutboxUserEventPublisher ─► tabela outbox   (mesma transação) → 202
+OutboxRelay (@Scheduled, 1s) ─► outbox pendente (FOR UPDATE SKIP LOCKED) ─► KafkaTemplate ─► tópico user.welcome-requested
+@KafkaListener WelcomeRequestedListener ─► SendWelcomeUseCase ─(porta out WelcomeNotifier)─► LoggingWelcomeNotifier (log)
+```
+
+| Peça | Onde |
+|---|---|
+| Evento `WelcomeRequested` | `domain/` |
+| Portas `UserEventPublisher`, `WelcomeNotifier`, `RequestWelcomeUseCase`, `SendWelcomeUseCase` | `application/port/` |
+| Outbox (entidade, repositório, publisher, relay) | `infrastructure/adapter/out/outbox/` |
+| Listener Kafka (adapter de entrada) | `infrastructure/adapter/in/messaging/` |
+| Notifier por log (troque por e-mail real) | `infrastructure/adapter/out/notification/` |
+| Tópico + `@EnableScheduling` | `infrastructure/config/MessagingConfig` |
+
+**Por que outbox?** Gravar no banco e publicar no Kafka são duas operações sem transação comum. Publicando direto, um crash entre o commit e o envio perde o evento (ou o evento sai e o commit falha). Com outbox o evento é gravado na mesma transação; o relay publica depois e só marca `published_at` após o ack do broker.
+
+**Entrega at-least-once:** se o relay cair depois do envio e antes do commit, a mensagem é reenviada. O consumidor precisa tolerar duplicatas (o notifier por log tolera; um envio de e-mail real deveria registrar o que já processou).
+
+Configuração: `KAFKA_BOOTSTRAP_SERVERS` (default `localhost:9092`, o Kafka do compose) e `app.outbox.poll-interval` (default `1s`). Ver as mensagens:
+
+```bash
+docker compose exec kafka /opt/kafka/bin/kafka-console-consumer.sh \
+  --bootstrap-server localhost:9092 --topic user.welcome-requested --from-beginning
+```
+
+**Limites conhecidos:** sem tabela de idempotência no consumidor, sem dead-letter topic (o error handler padrão tenta 10x e descarta), sem limpeza das linhas já publicadas do outbox e sem schema registry (contrato é JSON, com um record de cada lado).
+
 ## Testes
 
-Unitários (fakes) rodam sem infraestrutura. Os de integração (`UserControllerTest`, `SecurityTest`) usam **Testcontainers com PostgreSQL**: precisam do Docker rodando.
+Unitários (fakes) rodam sem infraestrutura. Os de integração usam **Testcontainers com PostgreSQL e Kafka**: precisam do Docker rodando. `WelcomeFlowTest` cobre o caminho completo HTTP → outbox → Kafka → listener (sem `@Transactional`, pois o relay só enxerga o outbox depois do commit).
 
 ## Pontos em aberto para um projeto real
 

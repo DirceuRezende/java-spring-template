@@ -5,6 +5,7 @@ import br.com.dirceurezende.template.user.application.port.in.GetUserUseCase;
 import br.com.dirceurezende.template.user.application.port.in.ListUsersUseCase;
 import br.com.dirceurezende.template.user.application.port.in.RegisterUserResult;
 import br.com.dirceurezende.template.user.application.port.in.RegisterUserUseCase;
+import br.com.dirceurezende.template.user.application.port.in.RequestWelcomeUseCase;
 import br.com.dirceurezende.template.user.application.port.in.UpdateUserCommand;
 import br.com.dirceurezende.template.user.application.port.in.UpdateUserUseCase;
 import br.com.dirceurezende.template.user.domain.UserId;
@@ -35,14 +36,16 @@ class UserController {
     private final ListUsersUseCase listUsers;
     private final UpdateUserUseCase updateUser;
     private final DeleteUserUseCase deleteUser;
+    private final RequestWelcomeUseCase requestWelcome;
 
     UserController(RegisterUserUseCase registerUser, GetUserUseCase getUser, ListUsersUseCase listUsers,
-                   UpdateUserUseCase updateUser, DeleteUserUseCase deleteUser) {
+                   UpdateUserUseCase updateUser, DeleteUserUseCase deleteUser, RequestWelcomeUseCase requestWelcome) {
         this.registerUser = registerUser;
         this.getUser = getUser;
         this.listUsers = listUsers;
         this.updateUser = updateUser;
         this.deleteUser = deleteUser;
+        this.requestWelcome = requestWelcome;
     }
 
     @PostMapping
@@ -88,6 +91,15 @@ class UserController {
     ResponseEntity<Void> delete(@PathVariable String id) {
         return deleteUser.delete(UserId.of(id))
                 ? ResponseEntity.noContent().build()
+                : ResponseEntity.notFound().build();
+    }
+
+    /** Assíncrono: grava no outbox e responde 202; o envio acontece via Kafka. */
+    @PostMapping("/{id}/welcome")
+    @PreAuthorize("hasRole('ADMIN') or #id == authentication.name")
+    ResponseEntity<Void> welcome(@PathVariable String id) {
+        return requestWelcome.request(UserId.of(id))
+                ? ResponseEntity.accepted().build()
                 : ResponseEntity.notFound().build();
     }
 }

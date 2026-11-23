@@ -8,6 +8,12 @@ import br.com.dirceurezende.template.user.application.port.in.LogoutUseCase;
 import br.com.dirceurezende.template.user.application.port.in.RefreshTokenUseCase;
 import br.com.dirceurezende.template.user.application.port.in.LoadUserCredentialsUseCase;
 import br.com.dirceurezende.template.user.application.port.in.RegisterUserUseCase;
+import br.com.dirceurezende.template.user.application.port.in.RequestWelcomeUseCase;
+import br.com.dirceurezende.template.user.application.port.in.SendWelcomeUseCase;
+import br.com.dirceurezende.template.user.application.port.out.UserEventPublisher;
+import br.com.dirceurezende.template.user.application.port.out.WelcomeNotifier;
+import br.com.dirceurezende.template.user.application.usecase.RequestWelcomeUseCaseImpl;
+import br.com.dirceurezende.template.user.application.usecase.SendWelcomeUseCaseImpl;
 import br.com.dirceurezende.template.user.application.port.in.UpdateUserUseCase;
 import br.com.dirceurezende.template.user.application.port.out.AccessTokenIssuer;
 import br.com.dirceurezende.template.user.application.port.out.PasswordHasher;
@@ -105,6 +111,19 @@ class UserBeansConfig {
         var useCase = new LogoutUseCaseImpl(refreshTokens);
         var tx = new TransactionTemplate(txManager);
         return token -> tx.executeWithoutResult(_ -> useCase.logout(token));
+    }
+
+    @Bean
+    RequestWelcomeUseCase requestWelcomeUseCase(UserRepository users, UserEventPublisher events, Clock clock,
+                                                PlatformTransactionManager txManager) {
+        var useCase = new RequestWelcomeUseCaseImpl(users, events, clock);
+        var tx = new TransactionTemplate(txManager); // grava no outbox na mesma transação da leitura
+        return id -> Objects.requireNonNull(tx.execute(_ -> useCase.request(id)));
+    }
+
+    @Bean
+    SendWelcomeUseCase sendWelcomeUseCase(WelcomeNotifier notifier) {
+        return new SendWelcomeUseCaseImpl(notifier);
     }
 
     private static TransactionTemplate readOnly(PlatformTransactionManager txManager) {
