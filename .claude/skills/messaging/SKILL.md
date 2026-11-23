@@ -19,7 +19,8 @@ Fluxo modelo, ponta a ponta: `RequestWelcomeUseCaseImpl` → `OutboxUserEventPub
    - um bean `NewTopic`, que o KafkaAdmin cria no startup.
 5. **Adapter** em `adapter/out/outbox/OutboxUserEventPublisher`:
    - um record de mensagem com campos primitivos e `Instant` (esse é o contrato JSON);
-   - `outbox.save(new OutboxJpaEntity(TOPICO, <id do agregado como chave>, json.writeValueAsString(msg), occurredAt))`;
+   - `outbox.save(new OutboxJpaEntity(TOPICO, <id do agregado como chave>, json.writeValueAsString(msg), occurredAt, currentTraceParent()))`;
+   - o `currentTraceParent()` grava o trace atual. O relay continua esse trace ao publicar, então reaproveite o helper do `OutboxUserEventPublisher`.
    - a chave igual ao id do agregado mantém a ordem por agregado.
 
 ## Consumir um evento
@@ -41,6 +42,7 @@ Evolua o JSON só **adicionando** campos. Consumidores antigos ignoram campo des
   - **sem** `@Transactional`, porque o relay só enxerga o outbox depois do commit;
   - `app.outbox.poll-interval=200ms`;
   - `@MockitoSpyBean` na porta de saída final;
+  - `@AutoConfigureTracing` + header `traceparent` conhecido, para verificar que o traceId chega ao consumidor (opcional);
   - `verify(porta, timeout(30_000))`;
   - dados com e-mail aleatório, porque o banco não é limpo.
 

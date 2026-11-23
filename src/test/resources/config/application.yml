@@ -1,0 +1,14 @@
+# Só nos testes (somado ao application.yml principal): tracing e propagação ativos, sem enviar nada para coletor OTLP
+management:
+  tracing:
+    export:
+      otlp:
+        enabled: false
+  logging:
+    export:
+      otlp:
+        enabled: false
+  otlp:
+    metrics:
+      export:
+        enabled: false

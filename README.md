@@ -1,9 +1,9 @@
 # user-template — Hexagonal com Java 25 + Spring Boot 4
 
-Template de referência com um agregado `User`, autenticação JWT e mensageria com Kafka (Transactional Outbox).
+Template de referência com um agregado `User`, autenticação JWT, mensageria com Kafka (Transactional Outbox) e observabilidade com OpenTelemetry.
 
 ```bash
-docker compose up -d                                   # Postgres 17 (5432) + Kafka (9092)
+docker compose up -d                                   # Postgres (5432) + Kafka (9092) + Grafana LGTM (3000)
 ./mvnw spring-boot:run -Dspring-boot.run.profiles=dev   # app com segredo JWT e admin de dev
 ./mvnw test                                             # inclui ArchitectureTest (quebra o build se a regra de dependência for violada)
 ```
@@ -31,6 +31,7 @@ docker run --rm -p 8080:8080 --network user-template_default \
   -e JWT_SECRET=<mín. 32 bytes> \
   -e DB_URL=jdbc:postgresql://postgres:5432/users \
   -e KAFKA_BOOTSTRAP_SERVERS=kafka:19092 \
+  -e OTEL_EXPORTER_OTLP_ENDPOINT=http://lgtm:4318 \
   user-template
 ```
 
@@ -150,6 +151,28 @@ docker compose exec kafka /opt/kafka/bin/kafka-console-consumer.sh \
 ```
 
 **Limites conhecidos:** sem tabela de idempotência no consumidor, sem dead-letter topic (o error handler padrão tenta 10x e descarta), sem limpeza das linhas já publicadas do outbox e sem schema registry (contrato é JSON, com um record de cada lado).
+
+## Observabilidade (OpenTelemetry)
+
+Traces, métricas e logs saem via **OTLP/HTTP** (`spring-boot-starter-opentelemetry`: Micrometer Observation + SDK OpenTelemetry). Em dev, o container `lgtm` do compose recebe tudo e mostra no **Grafana**: `http://localhost:3000` → Explore → **Tempo** (traces), **Loki** (logs), **Prometheus** (métricas).
+
+| Sinal | O que vem automático |
+|---|---|
+| Traces | HTTP de entrada, Spring Security, envio/consumo Kafka (`spring.kafka.*.observation-enabled`) |
+| Métricas | `http_server_requests_*`, JVM, Kafka, pool de conexões (envio a cada 1 min) |
+| Logs | Todo log do Logback, com `trace_id`/`span_id` (appender em `logback-spring.xml`); no console o traceId aparece entre colchetes |
+
+**Trace contínuo pelo outbox:** o relay publica numa thread agendada, então o contexto da requisição se perderia. O `OutboxUserEventPublisher` grava o `traceparent` (W3C) na coluna `outbox.trace_parent`; o `OutboxRelay` abre o span `outbox relay <tópico>` como filho dele, e a observação do Kafka propaga até o listener. Resultado, num trace só: `POST /welcome → outbox relay → <tópico> send → <tópico> process`. O polling do relay (1 s) é excluído das observações para não gerar um trace vazio por ciclo (`ObservabilityConfig`).
+
+| Variável | Default |
+|---|---|
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://localhost:4318` (traces, métricas e logs) |
+| `TRACING_SAMPLING_PROBABILITY` | `1.0` (100%; reduza em produção) |
+
+Se 3000/4317/4318 já estiverem em uso (outro LGTM rodando), suba com outras portas e aponte a app para elas:
+`GRAFANA_PORT=3001 OTLP_HTTP_PORT=14318 OTLP_GRPC_PORT=14317 docker compose up -d` e `OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:14318`.
+
+Nos testes nada é exportado (`src/test/resources/config/application.yml`); o `WelcomeFlowTest` liga o tracer real (`@AutoConfigureTracing`) e prova que o traceId da requisição chega ao consumidor Kafka.
 
 ## Testes
 

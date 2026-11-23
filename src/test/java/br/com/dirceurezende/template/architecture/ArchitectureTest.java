@@ -26,11 +26,13 @@ class ArchitectureTest {
     static final ArchRule domainIsFrameworkFree = noClasses()
             .that().resideInAPackage("..domain..")
             .should().dependOnClassesThat()
-            .resideInAnyPackage("org.springframework..", "jakarta..", "tools.jackson..", "com.fasterxml.jackson..", "org.hibernate..", "org.apache.kafka..");
+            .resideInAnyPackage("org.springframework..", "jakarta..", "tools.jackson..", "com.fasterxml.jackson..", "org.hibernate..", "org.apache.kafka..",
+                    "io.micrometer..", "io.opentelemetry..");
 
     @ArchTest
     static final ArchRule applicationIsFrameworkFree = noClasses()
             .that().resideInAPackage("..application..")
             .should().dependOnClassesThat()
-            .resideInAnyPackage("org.springframework..", "jakarta..", "tools.jackson..", "com.fasterxml.jackson..", "org.hibernate..", "org.apache.kafka..");
+            .resideInAnyPackage("org.springframework..", "jakarta..", "tools.jackson..", "com.fasterxml.jackson..", "org.hibernate..", "org.apache.kafka..",
+                    "io.micrometer..", "io.opentelemetry..");
 }

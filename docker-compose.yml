@@ -1,4 +1,4 @@
-# Postgres + Kafka para desenvolvimento local. Mesmas imagens dos testes (Testcontainers).
+# Postgres + Kafka + Grafana LGTM (observabilidade) para desenvolvimento local.
 services:
   postgres:
     image: postgres:17-alpine
@@ -39,6 +39,15 @@ services:
       interval: 10s
       timeout: 10s
       retries: 10
+
+  lgtm:
+    # Coletor OpenTelemetry + Tempo (traces) + Prometheus (métricas) + Loki (logs) + Grafana, num container só
+    # Portas sobrescrevíveis caso outro projeto já use 3000/4317/4318 (ajuste OTEL_EXPORTER_OTLP_ENDPOINT junto)
+    image: grafana/otel-lgtm:0.41.1
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"     # Grafana (sem login)
+      - "${OTLP_GRPC_PORT:-4317}:4317"   # OTLP gRPC
+      - "${OTLP_HTTP_PORT:-4318}:4318"   # OTLP HTTP (usado pela app)
 
 volumes:
   pgdata:
