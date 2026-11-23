@@ -129,6 +129,15 @@ class SecurityTest extends PostgresIntegrationTest {
                 .andExpect(status().isNotFound());
     }
 
+    @Test
+    void openApiAndSwaggerArePublic() throws Exception {
+        mvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.paths['/api/users/{id}/welcome']").exists())
+                .andExpect(jsonPath("$.components.securitySchemes.bearer.scheme").value("bearer"));
+        mvc.perform(get("/swagger-ui/index.html")).andExpect(status().isOk());
+    }
+
     // ---- refresh / logout
     @Test
     void refreshRotatesToken() throws Exception {

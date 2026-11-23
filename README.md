@@ -30,6 +30,10 @@ O schema é versionado pelo **Flyway** em `src/main/resources/db/migration` e ap
 
 ## Endpoints
 
+Documentação interativa (springdoc, pública em todos os profiles): **Swagger UI** em `http://localhost:8080/swagger-ui.html` e spec OpenAPI em `/v3/api-docs`. Para rotas protegidas: faça o login, clique em **Authorize** e cole o `accessToken` (sem `Bearer`).
+
+Collection do Postman em `postman/user-template.postman_collection.json` (importe no Postman; o Login salva os tokens sozinho).
+
 | Método | Rota | Resposta |
 |---|---|---|
 | POST | `/api/users` | 201 / 409 email duplicado |
@@ -88,6 +92,7 @@ Rodar local: `docker compose up -d` e `./mvnw spring-boot:run -Dspring-boot.run.
 | Rota | Quem |
 |---|---|
 | `POST /api/users`, `/api/auth/login`, `/api/auth/refresh`, `/api/auth/logout` | público |
+| `GET /swagger-ui.html`, `/swagger-ui/**`, `/v3/api-docs/**` | público |
 | `GET /api/users` (lista) | só ADMIN |
 | `GET/PUT/DELETE /api/users/{id}`, `POST /api/users/{id}/welcome` | ADMIN, ou o próprio usuário |
 
