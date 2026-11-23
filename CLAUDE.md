@@ -32,4 +32,5 @@ Uma tarefa está pronta quando `./mvnw test` passa por inteiro, incluindo o `Arc
 
 - Os starters são por módulo. O `@WithMockUser` só funciona no MockMvc com `spring-boot-starter-security-test`; o Flyway vem por `spring-boot-starter-flyway`.
 - O Jackson é o 3 (`tools.jackson.databind.json.JsonMapper`, exceções unchecked). Não confunda com o `com.fasterxml` do Jackson 2.
+- Em teste, o tracer é noop, a menos que o teste use `@AutoConfigureTracing`. Para não exportar em teste, desligue os exportadores OTLP (`src/test/resources/config/application.yml`), e não `management.tracing.export.enabled`: essa propriedade também desliga a propagação do `traceparent`.
 - O schema é só do Flyway, com `ddl-auto: validate`. Entidade divergente da migration derruba o startup. Migration já aplicada nunca é editada.

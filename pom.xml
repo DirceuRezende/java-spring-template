@@ -22,6 +22,8 @@
         <java.version>25</java.version>
         <archunit.version>1.4.1</archunit.version>
         <springdoc.version>3.1.0</springdoc.version>
+        <!-- Fora do BOM do Boot: a linha 2.N-alpha precisa casar com o opentelemetry.version do Boot (2.28 ↔ 1.62) -->
+        <opentelemetry-instrumentation.version>2.28.0-alpha</opentelemetry-instrumentation.version>
     </properties>
 
     <dependencies>
@@ -67,6 +69,18 @@
             <artifactId>spring-boot-starter-kafka</artifactId>
         </dependency>
 
+        <!-- Observabilidade: traces, métricas e logs via OTLP (Micrometer + OpenTelemetry) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-opentelemetry</artifactId>
+        </dependency>
+        <dependency>
+            <!-- Envia os logs do Logback via OTLP (ver logback-spring.xml) -->
+            <groupId>io.opentelemetry.instrumentation</groupId>
+            <artifactId>opentelemetry-logback-appender-1.0</artifactId>
+            <version>${opentelemetry-instrumentation.version}</version>
+        </dependency>
+
         <!-- Adapter de entrada/saída: segurança (PasswordEncoder + JWT via resource server/Nimbus) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -98,6 +112,12 @@
             <groupId>org.springframework.boot</groupId>
             <!-- Boot 4: traz spring-security-test + integração MockMvc (aplica @WithMockUser) -->
             <artifactId>spring-boot-starter-security-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <!-- @AutoConfigureTracing: em teste o tracer é noop, a menos que o teste peça -->
+            <artifactId>spring-boot-starter-opentelemetry-test</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>

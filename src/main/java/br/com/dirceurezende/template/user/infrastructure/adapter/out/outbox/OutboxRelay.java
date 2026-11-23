@@ -1,5 +1,7 @@
 package br.com.dirceurezende.template.user.infrastructure.adapter.out.outbox;
 
+import io.micrometer.tracing.Tracer;
+import io.micrometer.tracing.propagation.Propagator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -9,6 +11,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Clock;
+import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -16,6 +19,7 @@ import java.util.concurrent.TimeoutException;
 /**
  * Lê o outbox e publica no Kafka. Só marca como publicado depois do ack do broker;
  * se falhar no meio do lote, tudo volta e é reenviado no próximo ciclo (at-least-once).
+ * Cada envio roda num span filho do trace que gerou a mensagem: HTTP → Kafka → listener viram um trace só.
  */
 @Component
 class OutboxRelay {
@@ -27,13 +31,17 @@ class OutboxRelay {
     private final KafkaTemplate<String, String> kafka;
     private final TransactionTemplate tx;
     private final Clock clock;
+    private final Tracer tracer;
+    private final Propagator propagator;
 
     OutboxRelay(SpringDataOutboxRepository outbox, KafkaTemplate<String, String> kafka,
-                PlatformTransactionManager txManager, Clock clock) {
+                PlatformTransactionManager txManager, Clock clock, Tracer tracer, Propagator propagator) {
         this.outbox = outbox;
         this.kafka = kafka;
         this.tx = new TransactionTemplate(txManager);
         this.clock = clock;
+        this.tracer = tracer;
+        this.propagator = propagator;
     }
 
     @Scheduled(fixedDelayString = "${app.outbox.poll-interval:1s}")
@@ -49,6 +57,24 @@ class OutboxRelay {
     }
 
     private void send(OutboxJpaEntity message) {
+        if (message.getTraceParent() == null) {
+            doSend(message);
+            return;
+        }
+        var span = propagator.extract(Map.of("traceparent", message.getTraceParent()), Map::get)
+                .name("outbox relay " + message.getTopic())
+                .start();
+        try (var _ = tracer.withSpan(span)) {
+            doSend(message); // a observação do KafkaTemplate cria o span de envio como filho deste
+        } catch (RuntimeException e) {
+            span.error(e);
+            throw e;
+        } finally {
+            span.end();
+        }
+    }
+
+    private void doSend(OutboxJpaEntity message) {
         try {
             kafka.send(message.getTopic(), message.getMessageKey(), message.getPayload()).get(10, TimeUnit.SECONDS);
         } catch (InterruptedException e) {

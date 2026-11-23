@@ -13,7 +13,12 @@ public record JwtProperties(String jwtSecret,
                             @DefaultValue("7d") Duration refreshTtl) {
 
     public JwtProperties {
-        if (jwtSecret == null || jwtSecret.getBytes(StandardCharsets.UTF_8).length < 32) {
+        // O binder deixa placeholder não resolvido como texto literal ("${JWT_SECRET}")
+        if (jwtSecret == null || jwtSecret.startsWith("${")) {
+            throw new IllegalStateException(
+                    "app.security.jwt-secret não configurado: defina JWT_SECRET ou rode com o profile dev");
+        }
+        if (jwtSecret.getBytes(StandardCharsets.UTF_8).length < 32) {
             throw new IllegalStateException("app.security.jwt-secret deve ter ao menos 32 bytes");
         }
     }

@@ -31,16 +31,21 @@ class OutboxJpaEntity {
     @Column(name = "published_at")
     private Instant publishedAt;
 
+    /** W3C traceparent de quem gerou a mensagem; nulo quando não havia trace ativo. */
+    @Column(name = "trace_parent", length = 55)
+    private String traceParent;
+
     protected OutboxJpaEntity() {
         // exigido pelo JPA
     }
 
-    OutboxJpaEntity(String topic, String messageKey, String payload, Instant createdAt) {
+    OutboxJpaEntity(String topic, String messageKey, String payload, Instant createdAt, String traceParent) {
         this.id = UUID.randomUUID();
         this.topic = topic;
         this.messageKey = messageKey;
         this.payload = payload;
         this.createdAt = createdAt;
+        this.traceParent = traceParent;
     }
 
     void markPublished(Instant at) { this.publishedAt = at; }
@@ -49,4 +54,5 @@ class OutboxJpaEntity {
     String getMessageKey() { return messageKey; }
     String getPayload() { return payload; }
     Instant getPublishedAt() { return publishedAt; }
+    String getTraceParent() { return traceParent; }
 }
