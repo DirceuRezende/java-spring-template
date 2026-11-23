@@ -20,6 +20,22 @@ A conexão vem de variáveis de ambiente; os defaults apontam para o banco do co
 | `DB_USERNAME` | `users` |
 | `DB_PASSWORD` | `users` |
 
+### Imagem Docker
+
+`Dockerfile` multi-stage: **build** (JDK + Maven, cache do `~/.m2` via BuildKit) → **extract** (jar dividido nas camadas do Spring Boot) → **runtime** (só JRE, usuário sem root). As dependências (~86 MB) ficam numa camada própria; uma mudança de código gera só uma camada nova de ~100 KB para push/pull.
+
+```bash
+./mvnw test                                   # testes rodam fora do build da imagem (Testcontainers precisa de Docker)
+docker build -t user-template .
+docker run --rm -p 8080:8080 --network user-template_default \
+  -e JWT_SECRET=<mín. 32 bytes> \
+  -e DB_URL=jdbc:postgresql://postgres:5432/users \
+  -e KAFKA_BOOTSTRAP_SERVERS=kafka:19092 \
+  user-template
+```
+
+Dentro da rede do compose o Kafka é `kafka:19092`; do host, `localhost:9092`.
+
 ### Migrations (Flyway)
 
 O schema é versionado pelo **Flyway** em `src/main/resources/db/migration` e aplicado automaticamente no startup. O Hibernate roda com `ddl-auto: validate`: só confere se as entidades batem com o banco, e a app não sobe se divergirem.

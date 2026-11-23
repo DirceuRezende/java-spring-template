@@ -1,0 +1,12 @@
+# Só o necessário para o build entra no contexto (mais rápido e não invalida cache à toa)
+target/
+.git/
+.idea/
+.vscode/
+*.iml
+.claude/
+postman/
+Dockerfile
+.dockerignore
+docker-compose.yml
+*.md
