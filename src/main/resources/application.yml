@@ -1,0 +1,23 @@
+app:
+  security:
+    jwt-secret: ${JWT_SECRET}   # sem default: obrigatório fora do profile dev (mín. 32 bytes)
+
+spring:
+  autoconfigure:
+    # Autenticação é por JWT; evita o usuário/senha gerado no log
+    exclude: org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration
+  application:
+    name: user-template
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    # Defaults = Postgres do docker-compose.yml; em outros ambientes, sobrescreva pelas variáveis
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/users}
+    username: ${DB_USERNAME:users}
+    password: ${DB_PASSWORD:users}
+  jpa:
+    open-in-view: false
+    hibernate:
+      # Schema é do Flyway (db/migration); Hibernate só confere se as entidades batem
+      ddl-auto: validate

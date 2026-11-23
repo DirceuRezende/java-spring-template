@@ -1,0 +1,7 @@
+# Só para desenvolvimento local: -Dspring-boot.run.profiles=dev
+app:
+  security:
+    jwt-secret: dev-only-secret-change-me-0123456789abcdef
+  dev-admin:
+    email: admin@example.com
+    password: admin12345
